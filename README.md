@@ -8,6 +8,7 @@ The Mubiquity Visual Studio extension has a few parts:
 * Source Template
 
 To iterate on this:
+
 1. Fork the Mubiquity repository
 1. Install Visual Studio 2015 RC
 1. Install Visual Studio 2015 RC SDK
