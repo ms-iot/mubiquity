@@ -24,13 +24,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Mubiquity;
 
-namespace UnitTests
+namespace Mubiquity
 {
-    class System
+    class Arduino
     {
-    	// Bootstrap for the Mubiquity support framework. Will fill out in future changes
 
+        static public List<Arduino> FindArduino()
+        {
+            List<Arduino> foundArduino = new List<Arduino>();
+
+
+            return foundArduino;
+        }
     }
 }
