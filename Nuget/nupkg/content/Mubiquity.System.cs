@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Mubiquity
 {
-    class Systen
+    class System
     {
     }
 }
