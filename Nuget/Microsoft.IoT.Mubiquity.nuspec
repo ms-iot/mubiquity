@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.IoT.Mubiquity</id>
+    <version>1.0.0</version>
+    <title>Microsoft Mubiquity</title>
+    <authors>Microsoft</authors>
+    <owners>Microsoft</owners>
+    <licenseUrl>http://www.microsoft.com/en-us/legal/intellectualproperty/copyright/default.aspx</licenseUrl>
+    <projectUrl>https://www.windowsondevices.com/</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>The Mubiquity toolkit allows a CPU hosted application to manage a Microcontroller.</description>
+    <summary>Microsoft Mubiquity</summary>
+    <releaseNotes />
+    <copyright>Copyright 2015</copyright>
+    <tags>arduino microsoft iot</tags>
+  </metadata>
+</package>
