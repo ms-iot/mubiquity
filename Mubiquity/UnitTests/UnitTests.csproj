@@ -116,19 +116,25 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\Nuget\nupkg\content\Mubiquity.Arduino.cs">
-      <Link>Mubiquity.Arduino.cs</Link>
+      <Link>Nuget\Mubiquity.Arduino.cs</Link>
+    </Compile>
+    <Compile Include="..\..\Nuget\nupkg\content\Mubiquity.Arduino.HexFile.cs">
+      <Link>Nuget\Mubiquity.Arduino.HexFile.cs</Link>
     </Compile>
     <Compile Include="..\..\Nuget\nupkg\content\Mubiquity.System.cs">
-      <Link>Mubiquity.System.cs</Link>
+      <Link>Nuget\Mubiquity.System.cs</Link>
     </Compile>
-    <Compile Include="ArduinoUnitTest.cs" />
+    <Compile Include="UnitTests\ArduinoUnitTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SystemUnitTest.cs" />
+    <Compile Include="UnitTests\SystemUnitTest.cs" />
   </ItemGroup>
   <ItemGroup>
     <AppxManifest Include="Package.appxmanifest">
       <SubType>Designer</SubType>
     </AppxManifest>
+    <Content Include="Assets\Blink.cpp.hex">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="packages.config" />
     <None Include="UnitTests_TemporaryKey.pfx" />
   </ItemGroup>
