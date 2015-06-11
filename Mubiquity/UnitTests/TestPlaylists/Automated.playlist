@@ -1,0 +1,1 @@
+<Playlist Version="1.0"><Add Test="UnitTests.ArduinoUnitTest.TestHexFileLoader" /><Add Test="UnitTests.ArduinoUnitTest.TestHexFileParseMultiLine" /><Add Test="UnitTests.ArduinoUnitTest.TestHexFileParseEndOfFile" /><Add Test="UnitTests.ArduinoUnitTest.TestHexFileParseShortLine" /><Add Test="UnitTests.ArduinoUnitTest.TestHexFileParseLine" /></Playlist>

@@ -20,10 +20,9 @@
 */
 
 using System;
-using System.IO;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using System.Globalization;
+using System.IO;
+using System.Threading.Tasks;
 using Windows.Storage;
 
 
@@ -117,7 +116,7 @@ namespace Mubiquity
                                 int byteIndex = 0;
                                 while (byteIndex < byteCount && lineIndex < line.Length)
                                 {
-                                    Contents[baseAddress + byteIndex] = parseByte(line, ref lineIndex, ref accumulatedChecksum);
+                                    Contents[baseAddress + offset + byteIndex] = parseByte(line, ref lineIndex, ref accumulatedChecksum);
 
                                     byteIndex++;
                                 }

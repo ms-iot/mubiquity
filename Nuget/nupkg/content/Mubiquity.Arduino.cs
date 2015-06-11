@@ -20,17 +20,11 @@
 */
 
 using System;
-using System.IO;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using Windows.Devices.Enumeration;
 using Windows.Devices.SerialCommunication;
 using Windows.Storage.Streams;
-using Buffer = Windows.Storage.Streams.Buffer;
-using System.Diagnostics;
-using Windows.Storage;
 
 namespace Mubiquity
 {
@@ -72,6 +66,11 @@ namespace Mubiquity
         const char kAVR109Command_SetAddressHigh = 'H';
         const char kAVR109Command_WriteBlockLength = 'B';
         const char kAVR109Command_WriteBlock = 'F';
+        const char kAVR109Command_ExitBootloader = 'E';
+        const char kAVR109Command_CheckBlockSupport = 'E';
+        const char kAVR109Command_ReadSignature = 's';
+
+        const char kAVR109Response_Yes = 'Y';
 
         const char kAVR109Response_Success = '\r';
 
@@ -271,6 +270,10 @@ namespace Mubiquity
 
         public async Task program(ArduinoHexFile file)
         {
+            if (!arduino.IsConnected)
+            {
+                throw new Exception("Arduino is not connected");
+            }
             // The Arduino bootloader will identify a baud rate change 
             // from normal (i.e. 57,600) to 1,200 then to close
             // as a signal to enter the bootloader.
@@ -278,7 +281,7 @@ namespace Mubiquity
             // we have less than 5 seconds to reopen it.
 
             arduino.serialDevice.BaudRate = 1200;
-            await arduino.close();
+            arduino.close();
             await Task.Delay(kProgrammingDelay);
 
             List<Arduino> arduinoInBootloader = await Arduino.FindArduino(arduino.VID, arduino.ProgrammerPID);
@@ -289,16 +292,16 @@ namespace Mubiquity
 
                 // First fetch the signature
 
-                await sendCommand('s');
+                await sendCommand(kAVR109Command_ReadSignature);
 
                 byte[] signature = await getBytes(kSignatureByteCount);
 
                 verifySignature(signature); // throws
 
-                await sendCommand('b');
+                await sendCommand(kAVR109Command_CheckBlockSupport);
 
                 byte blockModeSupported = await getByte();
-                if (Convert.ToChar(blockModeSupported) == 'Y')
+                if (Convert.ToChar(blockModeSupported) == kAVR109Response_Yes)
                 {
                     await writeFile(file);
                 }
@@ -307,8 +310,10 @@ namespace Mubiquity
                     // shrug
                 }
 
-                await bootloader.close();
+                await sendCommand(kAVR109Command_ExitBootloader);
 
+                // This should reboot; rendering the serial device invalid.
+                await Task.Delay(kProgrammingDelay);
 
                 // Lastly reconnect
                 await arduino.connect();
@@ -379,9 +384,8 @@ namespace Mubiquity
             }
         }
 
-        public async Task close()
+        public void close()
         {
-            await writer.FlushAsync();
             reader.Dispose();
             reader = null;
             writer.Dispose();

@@ -1,6 +1,4 @@
-﻿using System;
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-using Mubiquity;
+﻿using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
 
 namespace UnitTests
 {

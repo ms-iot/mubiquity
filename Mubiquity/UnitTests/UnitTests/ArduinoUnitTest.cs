@@ -1,12 +1,7 @@
-﻿using System;
-using System.IO;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
 using Mubiquity;
-using Windows.Storage;
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace UnitTests
 {
@@ -35,6 +30,23 @@ namespace UnitTests
         {
             byte[] lineExpected = new byte[] { 0x0C, 0x94, 0x67, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01 };
             string lineToParse = ":100000000C9467010C948F010C948F010C948F0158\n";
+            Stream lineStream = streamFromString(lineToParse);
+            ArduinoHexFile hexFile = new ArduinoHexFile((uint)lineExpected.Length);
+
+
+            await hexFile.Parse(lineStream);
+
+            Assert.AreEqual(hexFile.Contents.Length, lineExpected.Length);
+            CollectionAssert.AreEqual(hexFile.Contents, lineExpected);
+        }
+
+        [TestMethod]
+        public async Task TestHexFileParseMultiLine()
+        {
+            byte[] lineExpected = new byte[] { 0x0C, 0x94, 0x67, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01,
+                                               0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01,
+                                               0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x8F, 0x01, 0x0C, 0x94, 0x84, 0x06, 0x0C, 0x94, 0x50, 0x05};
+            string lineToParse = ":100000000C9467010C948F010C948F010C948F0158\n:100010000C948F010C948F010C948F010C948F0120\n:100020000C948F010C948F010C9484060C94500551\n";
             Stream lineStream = streamFromString(lineToParse);
             ArduinoHexFile hexFile = new ArduinoHexFile((uint)lineExpected.Length);
 
@@ -100,6 +112,7 @@ namespace UnitTests
             {
                 var arduino = arduinoList[0];
                 await arduino.connect();
+                Assert.IsTrue(arduino.IsConnected);
                 var programmer = arduino.GetProgrammer();
 
                 ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Assets/Blink.cpp.hex", 28672);
