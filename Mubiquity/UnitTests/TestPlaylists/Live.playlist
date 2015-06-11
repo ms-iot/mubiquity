@@ -1,0 +1,1 @@
+<Playlist Version="1.0"><Add Test="UnitTests.ArduinoUnitTest.TestConnectToArduino" /><Add Test="UnitTests.ArduinoUnitTest.TestProgrammingLiveArduino" /><Add Test="UnitTests.ArduinoUnitTest.TestFindArduino" /></Playlist>
