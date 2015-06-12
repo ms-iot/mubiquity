@@ -33,7 +33,6 @@ namespace Mubiquity
         public string name;
         public Type programmer;
         public uint flashSize;      // from spec sheet
-        public uint pageSize;      // from spec sheet
         public ushort programmerPid;
     };
 
@@ -62,13 +61,14 @@ namespace Mubiquity
         const char kAVR109Command_CommitPage = 'm';
         const char kAVR109Command_WriteLowByte = 'c';
         const char kAVR109Command_WriteHighByte = 'C';
-        const char kAVR109Command_SetAddressLow = 'A';
+        const char kAVR109Command_SetAddress = 'A';
         const char kAVR109Command_SetAddressHigh = 'H';
-        const char kAVR109Command_WriteBlockLength = 'B';
-        const char kAVR109Command_WriteBlock = 'F';
+        const char kAVR109Command_BeginWriteFlashBlock = 'B';
+        const char kAVR109Command_WriteFlashBlock = 'F';
         const char kAVR109Command_ExitBootloader = 'E';
-        const char kAVR109Command_CheckBlockSupport = 'E';
+        const char kAVR109Command_CheckBlockSupport = 'b';
         const char kAVR109Command_ReadSignature = 's';
+        const char kAVR109Command_EraseApplication = 'e';
 
         const char kAVR109Response_Yes = 'Y';
 
@@ -138,7 +138,7 @@ namespace Mubiquity
             // Yep, cast to int. Why does C# allow negative indexes?
             Array.Copy(bytesToSend, (int)start, bytesToWrite, 0, (int)length);
 
-            bootloader.writer.WriteBytes(bytesToSend);
+            bootloader.writer.WriteBytes(bytesToWrite);
             await bootloader.writer.StoreAsync();
         }
 
@@ -166,16 +166,8 @@ namespace Mubiquity
 
         internal async Task setAddress(uint address)
         {
-            if (address < 0x1000)
-            {
-                await sendCommand(kAVR109Command_SetAddressLow);
-                await sendBytes(new byte[] { (byte)((address >> 8) & 0xff), (byte)((address) & 0xff) });
-            }
-            else
-            {
-                await sendCommand(kAVR109Command_SetAddressHigh);
-                await sendBytes(new byte[] { (byte)((address >> 16) & 0xff), (byte)((address >> 8) & 0xff), (byte)((address) & 0xff) });
-            }
+            await sendCommand(kAVR109Command_SetAddress);
+            await sendBytes(new byte[] { (byte)((address >> 8) & 0xff), (byte)((address) & 0xff) });
 
             byte ret = await getByte();
             if (ret != kAVR109Response_Success)
@@ -187,11 +179,11 @@ namespace Mubiquity
         internal async Task writeBlock(ArduinoHexFile file, uint address, uint byteCount)
         {
             await setAddress(address >> 1);
-            await sendCommand(kAVR109Command_WriteBlockLength);
+            await sendCommand(kAVR109Command_BeginWriteFlashBlock);
 
             await sendBytes(new byte[] { (byte)((byteCount >> 8) & 0xFF), (byte)(byteCount & 0xFF) });
 
-            await sendCommand(kAVR109Command_WriteBlock);
+            await sendCommand(kAVR109Command_WriteFlashBlock);
 
             await sendBytesFromArray(file.Contents, address, byteCount);
             byte ret = await getByte();
@@ -213,7 +205,7 @@ namespace Mubiquity
                 await sendByte(FlashByteType.Low, 0xFF);
                 await sendByte(FlashByteType.High, file[address]);
 
-                if ((address % arduinoData.pageSize) == 0 ||
+                if ((address % blockSize) == 0 ||
                     (address > file.EndOfDataRange))
                 {
                     await setAddress((address - 2) >> 1);       // Move the address into the write page so atmel chip knows what to commit.
@@ -244,8 +236,10 @@ namespace Mubiquity
                 }
             }
 
-            while (file.EndOfDataRange - address + 1 >= blockSize)
+            while (file.EndOfDataRange - address >= blockSize)
             {
+                await setAddress(address >> 1);
+
                 await writeBlock(file, address, blockSize);
 
                 address += blockSize;
@@ -253,9 +247,9 @@ namespace Mubiquity
 
 
             // any remaining bytes at the end?
-            if (file.EndOfDataRange - address + 1 >= 1)
+            if (file.EndOfDataRange - address >= 1)
             {
-                uint byteCount = file.EndOfDataRange - address + 1;
+                uint byteCount = file.EndOfDataRange - address;
                 await writeBlock(file, address, byteCount);
                 address += blockSize;
 
@@ -298,6 +292,13 @@ namespace Mubiquity
 
                 verifySignature(signature); // throws
 
+                await sendCommand(kAVR109Command_EraseApplication);
+                byte ret = await getByte();
+                if (ret != kAVR109Response_Success)
+                {
+                    throw new Exception("Failed to erase application space");
+                }
+
                 await sendCommand(kAVR109Command_CheckBlockSupport);
 
                 byte blockModeSupported = await getByte();
@@ -325,8 +326,8 @@ namespace Mubiquity
     {
         static Dictionary<string, ArduinoData> knownArduinoVID = new Dictionary<string, ArduinoData>
         {
-            { "VID_2341", new ArduinoData() { name = "Leonardo", programmer = typeof(ArduinoCDCProgrammer), programmerPid = 0x36, flashSize = 28672, pageSize = 2560 } },
-            { "VID_2A03", new ArduinoData() { name = "Leonardo", programmer = typeof(ArduinoCDCProgrammer), programmerPid = 0x03, flashSize = 28672, pageSize = 2560 } },
+            { "VID_2341", new ArduinoData() { name = "Leonardo", programmer = typeof(ArduinoCDCProgrammer), programmerPid = 0x36, flashSize = 28672} },
+            { "VID_2A03", new ArduinoData() { name = "Leonardo", programmer = typeof(ArduinoCDCProgrammer), programmerPid = 0x03, flashSize = 28672} },
         };
 
         private ArduinoData arduinoData;
@@ -366,7 +367,7 @@ namespace Mubiquity
             return programmer;
         }
 
-        public async Task connect(uint baud = 57600, bool enableDTR = true)
+        public async Task connect(uint baud = 57600, bool enableDTR = false)
         {
             serialDevice = await Arduino.CreateSerialDevice(DeviceId, baud);
             if (serialDevice != null)
