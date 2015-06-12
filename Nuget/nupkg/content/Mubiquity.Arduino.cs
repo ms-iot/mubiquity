@@ -131,12 +131,11 @@ namespace Mubiquity
             bootloader.writer.WriteBytes(bytesToSend);
             await bootloader.writer.StoreAsync();
         }
-        internal async Task sendBytesFromArray(byte[] bytesToSend, uint start, uint length)
+        internal async Task sendBytesFromArray(byte[] bytesToSend, int start, int length)
         {
             byte[] bytesToWrite = new byte[length];
 
-            // Yep, cast to int. Why does C# allow negative indexes?
-            Array.Copy(bytesToSend, (int)start, bytesToWrite, 0, (int)length);
+            Array.Copy(bytesToSend, (int)start, bytesToWrite, 0, length);
 
             bootloader.writer.WriteBytes(bytesToWrite);
             await bootloader.writer.StoreAsync();
@@ -164,7 +163,7 @@ namespace Mubiquity
             await bootloader.writer.StoreAsync();
         }
 
-        internal async Task setAddress(uint address)
+        internal async Task setAddress(int address)
         {
             await sendCommand(kAVR109Command_SetAddress);
             await sendBytes(new byte[] { (byte)((address >> 8) & 0xff), (byte)((address) & 0xff) });
@@ -176,7 +175,7 @@ namespace Mubiquity
             }
         }
 
-        internal async Task writeBlock(ArduinoHexFile file, uint address, uint byteCount)
+        internal async Task writeBlock(ArduinoHexFile file, int address, int byteCount)
         {
             await setAddress(address >> 1);
             await sendCommand(kAVR109Command_BeginWriteFlashBlock);
@@ -195,48 +194,10 @@ namespace Mubiquity
 
         internal async Task writeFile(ArduinoHexFile file)
         {
-            uint blockSize = ((uint)await getByte()) << 8 | await getByte();
-            uint address = file.StartOfDataRange;
+            int blockSize = ((int)await getByte()) << 8 | await getByte();
+            int address = 0;
 
-            // address is odd
-            if ((address & 1) == 1)
-            {
-                await setAddress(address >> 1);
-                await sendByte(FlashByteType.Low, 0xFF);
-                await sendByte(FlashByteType.High, file[address]);
-
-                if ((address % blockSize) == 0 ||
-                    (address > file.EndOfDataRange))
-                {
-                    await setAddress((address - 2) >> 1);       // Move the address into the write page so atmel chip knows what to commit.
-                    await sendCommand(kAVR109Command_CommitPage);
-                    await setAddress(address  >> 1);
-                }
-
-                address++;
-            }
-
-            // Middle of first Block
-            if ((address % blockSize) > 0)
-            {
-                uint byteCount = blockSize - (address % blockSize);
-
-                // Writing past end of page?
-                if ((address + byteCount - 1) > file.EndOfDataRange)
-                {
-                    byteCount = file.EndOfDataRange - address + 1;
-                    byteCount &= ~(uint)0x1;  // make word
-                }
-
-                if (byteCount > 0)
-                {
-                    await writeBlock(file, address, byteCount);
-
-                    address += byteCount;
-                }
-            }
-
-            while (file.EndOfDataRange - address >= blockSize)
+            while (file.Contents.Length - address >= blockSize)
             {
                 await setAddress(address >> 1);
 
@@ -247,9 +208,9 @@ namespace Mubiquity
 
 
             // any remaining bytes at the end?
-            if (file.EndOfDataRange - address >= 1)
+            if (file.Contents.Length - address >= 1)
             {
-                uint byteCount = file.EndOfDataRange - address;
+                int byteCount = file.Contents.Length - address;
                 await writeBlock(file, address, byteCount);
                 address += blockSize;
 
