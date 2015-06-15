@@ -35,10 +35,6 @@ namespace Mubiquity
 
         public byte[] Contents { get; private set; } = null;
 
-        public uint StartOfDataRange { get; private set; } = 0;
-
-        public uint EndOfDataRange { get { return (uint)Contents.Length; } }
-
         enum RecordType
         {
             Data,
