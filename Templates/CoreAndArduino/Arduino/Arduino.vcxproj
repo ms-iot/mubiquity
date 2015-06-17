@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Arduino.ino" />
+    <None Include="Makefile" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{8206AD22-0955-473D-9FFC-79D831ADA300}</ProjectGuid>
@@ -41,8 +42,14 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <NMakeOutput>Firmware.img</NMakeOutput>
+    <NMakeOutput>Arduino.hex</NMakeOutput>
     <NMakePreprocessorDefinitions>WIN32;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
+    <NMakeBuildCommandLine>nmake /p IntDir=$(IntDir) OutDir=$(OutDir) Output=$(NMakeOutput)</NMakeBuildCommandLine>
+    <NMakeReBuildCommandLine>nmake clean;
+nmake</NMakeReBuildCommandLine>
+    <NMakeCleanCommandLine>nmake clean</NMakeCleanCommandLine>
+    <AdditionalOptions>
+    </AdditionalOptions>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <NMakeOutput>Firmware.img</NMakeOutput>
