@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Mubiquity;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
@@ -25,18 +27,11 @@ namespace $safeprojectname$
     sealed partial class App : Application
     {
         /// <summary>
-        /// Allows tracking page views, exceptions and other telemetry through the Microsoft Application Insights service.
-        /// </summary>
-        public static Microsoft.ApplicationInsights.TelemetryClient TelemetryClient;
-
-        /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
         /// executed, and as such is the logical equivalent of main() or WinMain().
         /// </summary>
         public App()
         {
-            TelemetryClient = new Microsoft.ApplicationInsights.TelemetryClient();
-
             this.InitializeComponent();
             this.Suspending += OnSuspending;
         }
@@ -85,6 +80,22 @@ namespace $safeprojectname$
             }
             // Ensure the current window is active
             Window.Current.Activate();
+
+            Task.Run(async () =>
+            {
+                var arduinoList = await Arduino.FindArduino();
+                if (arduinoList.Count > 0)
+                {
+                    var arduino = arduinoList[0];
+                    await arduino.connect();
+                    var programmer = arduino.GetProgrammer();
+
+                    ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Firmware/Arduino.hex", 28672);
+
+                    await programmer.program(hexFile);
+                    await Task.Delay(5000);
+                }
+            });
         }
 
         /// <summary>

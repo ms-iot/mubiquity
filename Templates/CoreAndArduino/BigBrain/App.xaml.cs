@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Mubiquity;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Windows.ApplicationModel;
 using Windows.ApplicationModel.Activation;
 using Windows.Foundation;
@@ -85,6 +87,23 @@ namespace BigBrain
             }
             // Ensure the current window is active
             Window.Current.Activate();
+
+            Task.Run(async () =>
+            {
+                var arduinoList = await Arduino.FindArduino();
+                if (arduinoList.Count > 0)
+                {
+                    var arduino = arduinoList[0];
+                    await arduino.connect();
+                    Assert.IsTrue(arduino.IsConnected);
+                    var programmer = arduino.GetProgrammer();
+
+                    ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Assets/Blink.cpp.hex", 28672);
+
+                    await programmer.program(hexFile);
+                    await Task.Delay(5000);
+                }
+            });
         }
 
         /// <summary>

@@ -45,9 +45,9 @@
     <NMakeOutput>Arduino.hex</NMakeOutput>
     <NMakePreprocessorDefinitions>WIN32;_DEBUG;$(NMakePreprocessorDefinitions)</NMakePreprocessorDefinitions>
     <NMakeBuildCommandLine>nmake /p IntDir=$(IntDir) OutDir=$(IntDir) Output=$(NMakeOutput)</NMakeBuildCommandLine>
-    <NMakeReBuildCommandLine>nmake clean IntDir=$(IntDir) OutDir=$(IntDir) Output=$(NMakeOutput);
+    <NMakeReBuildCommandLine>nmake clean;
 nmake</NMakeReBuildCommandLine>
-    <NMakeCleanCommandLine>nmake clean IntDir=$(IntDir) OutDir=$(IntDir) Output=$(NMakeOutput)</NMakeCleanCommandLine>
+    <NMakeCleanCommandLine>nmake clean</NMakeCleanCommandLine>
     <AdditionalOptions>
     </AdditionalOptions>
   </PropertyGroup>
