@@ -223,7 +223,6 @@ namespace Mubiquity
             return findInoInProject(projItems) != null;
         }
 
-
         /// <summary>
         /// Returns true if the given project is a Mubiquity Solution
         /// </summary>
@@ -264,12 +263,7 @@ namespace Mubiquity
 
         private void OnProjectItemAdded(ProjectItem newItem)
         {
-            Debug.WriteLine(newItem.Name);
-            if (newItem.Name.Contains(".ino")) // check to make sure this is only done on ino files
-            {
-                // make it use the c++ syntax highlighter
-                newItem.Properties.Item("ItemType").Value = "ClCompile";
-            }
+            // Nothing for now
         }
 
         private void OnBuildBegin(vsBuildScope scope, vsBuildAction action)
@@ -294,7 +288,6 @@ namespace Mubiquity
 
                     arduinoHelper.regenerateMakefile();
                 }
-
             }
 
             // Ensure that the output of the Arduino project is in the firmware folder of the mubiquity project
@@ -346,19 +339,7 @@ namespace Mubiquity
         /// <param name="proj">Project that is being added or opened</param>
         private void OnProjectAdded(Project project)
         {
-            if (IsMubiquityProject(project))
-            {
-                //AddNuGetPackage(project);
-            }
-            else
-            {
-                // set the INO to C++ compile so it gets syntax highlighting.
-                ProjectItem ino = findInoInProject(project.ProjectItems);
-                if (ino != null)
-                {
-                    ino.Properties.Item("ItemType").Value = "ClCompile";
-                }
-            }
+            // nothing for now
         }
 
         /// <summary>
@@ -367,56 +348,35 @@ namespace Mubiquity
         /// <param name="proj">Project that is being added or opened</param>
         private void OnSolutionOpened()
         {
-            /*
             var solution = Dte.Solution;
+            List<Project> microControllerProject = new List<Project>();
+            Project uwpProject = null;
 
-            foreach (var proj in solution.Projects)
+            // Set the uwp project dependencies
+            foreach (var p in solution.Projects)
             {
-                var project = proj as Project;
-                if (project != null)
+                var project = p as Project;
+                ProjectItem ino = findInoInProject(project.ProjectItems);
+                if (ino == null)
                 {
-                    if (IsMubiquityProject(project))
-                    {
-                        //AddNuGetPackage(project);
-                    }
-                    else
-                    {
-                        // set the INO to C++ compile so it gets syntax highlighting.
-                        ProjectItem ino = findInoInProject(project.ProjectItems);
-                        if (ino != null)
-                        {
-                            ino.Properties.Item("ItemType").Value = "ClCompile";
-                        }
-                    }
+                    uwpProject = project;
+                }
+                else
+                {
+                    microControllerProject.Add(project);
                 }
             }
-            */
-        }
 
-        #endregion
-
-        #region NugetUpdate code
-        /// <summary>
-        /// Add our nuget package to the project
-        /// </summary>
-        /// <param name="proj">Project to add the NuGet to.</param>
-        private void AddNuGetPackage(Project proj)
-        {
-            IComponentModel componentModel = (IComponentModel)GetService(typeof(SComponentModel));
-            IVsPackageInstaller installerServices = componentModel.GetService<IVsPackageInstaller>();
-            if (installerServices != null)
+            if (uwpProject != null)
             {
-                try
+                foreach (var mcu in microControllerProject)
                 {
-                    installerServices.InstallPackage("All", proj, "Microsoft.IoT.Mubiquity", (String)null, false);
-                }
-                catch (Exception e)
-                {
-                    Debug.WriteLine("Failed to install Nuget Package - \n" + e.Message + "\n" + e.StackTrace);
+                    solution.SolutionBuild.BuildDependencies.Item(uwpProject.UniqueName).AddProject(mcu.UniqueName);
                 }
             }
         }
-        #endregion
 
+
+        #endregion
     }
 }
