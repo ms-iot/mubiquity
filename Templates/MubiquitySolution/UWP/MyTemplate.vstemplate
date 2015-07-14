@@ -1,23 +1,22 @@
 <VSTemplate Version="3.0.0" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005" Type="Project">
   <TemplateData>
-    <Name>BigBrain</Name>
-    <Description>Mubiquity multibrain solution - Big Brain</Description>
+    <Name>Universal Windows App</Name>
+    <Description>Universal Windows Application with Arduino support</Description>
     <ProjectType>CSharp</ProjectType>
     <ProjectSubType>
     </ProjectSubType>
     <SortOrder>1000</SortOrder>
     <CreateNewFolder>true</CreateNewFolder>
-    <DefaultName>BigBrain</DefaultName>
+    <DefaultName>UWP</DefaultName>
     <ProvideDefaultName>true</ProvideDefaultName>
     <LocationField>Enabled</LocationField>
     <EnableLocationBrowseButton>true</EnableLocationBrowseButton>
     <Icon>__TemplateIcon.ico</Icon>
   </TemplateData>
   <TemplateContent>
-    <Project TargetFileName="BigBrain.csproj" File="BigBrain.csproj" ReplaceParameters="true">
+    <Project TargetFileName="UWP.csproj" File="UWP.csproj" ReplaceParameters="true">
       <ProjectItem ReplaceParameters="true" TargetFileName="App.xaml">App.xaml</ProjectItem>
       <ProjectItem ReplaceParameters="true" TargetFileName="App.xaml.cs">App.xaml.cs</ProjectItem>
-      <ProjectItem ReplaceParameters="true" TargetFileName="ApplicationInsights.config">ApplicationInsights.config</ProjectItem>
       <Folder Name="Assets" TargetFolderName="Assets">
         <ProjectItem ReplaceParameters="false" TargetFileName="Logo.scale-100.png">Logo.scale-100.png</ProjectItem>
         <ProjectItem ReplaceParameters="false" TargetFileName="SmallLogo.scale-100.png">SmallLogo.scale-100.png</ProjectItem>
@@ -25,15 +24,33 @@
         <ProjectItem ReplaceParameters="false" TargetFileName="StoreLogo.scale-100.png">StoreLogo.scale-100.png</ProjectItem>
         <ProjectItem ReplaceParameters="false" TargetFileName="WideLogo.scale-100.png">WideLogo.scale-100.png</ProjectItem>
       </Folder>
-      <ProjectItem ReplaceParameters="false" TargetFileName="BigBrain_TemporaryKey.pfx">BigBrain_TemporaryKey.pfx</ProjectItem>
+      <ProjectItem ReplaceParameters="false" TargetFileName="UWP_TemporaryKey.pfx">UWP_TemporaryKey.pfx</ProjectItem>
+      <Folder Name="Firmware" TargetFolderName="Firmware">
+      </Folder>
       <ProjectItem ReplaceParameters="true" TargetFileName="MainPage.xaml">MainPage.xaml</ProjectItem>
       <ProjectItem ReplaceParameters="true" TargetFileName="MainPage.xaml.cs">MainPage.xaml.cs</ProjectItem>
       <ProjectItem ReplaceParameters="false" TargetFileName="Package.appxmanifest">Package.appxmanifest</ProjectItem>
-      <ProjectItem ReplaceParameters="true" TargetFileName="packages.config">packages.config</ProjectItem>
       <Folder Name="Properties" TargetFolderName="Properties">
         <ProjectItem ReplaceParameters="true" TargetFileName="AssemblyInfo.cs">AssemblyInfo.cs</ProjectItem>
         <ProjectItem ReplaceParameters="true" TargetFileName="Default.rd.xml">Default.rd.xml</ProjectItem>
       </Folder>
     </Project>
   </TemplateContent>
+  <WizardExtension>
+    <Assembly>Microsoft.VisualStudio.WinRT.TemplateWizards, Version=14.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</Assembly>
+    <FullClassName>Microsoft.VisualStudio.WinRT.TemplateWizards.CreateProjectCertificate.Wizard</FullClassName>
+  </WizardExtension>
+  <WizardExtension>
+    <Assembly>NuGet.VisualStudio.Interop, Version=1.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</Assembly>
+    <FullClassName>NuGet.VisualStudio.TemplateWizard</FullClassName>
+  </WizardExtension>
+  <WizardData>
+    <packages repository="registry" keyName="UAPFrameworkDependenciesLocationVS14" isPreunzipped="true">
+      <package id="System.Numerics.Vectors" version="4.0.0" skipAssemblyReferences="false" />
+    </packages>
+    <packages repository="extension"
+              repositoryId="Microsoft.IoT.MubiquityVSIX">
+      <package id="Microsoft.IoT.Mubiquity" version="1.0.0" />
+    </packages>
+  </WizardData>
 </VSTemplate>

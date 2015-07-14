@@ -8,14 +8,14 @@
 
   <Identity
     Name="ff8b7c34-0947-42e1-877a-64f95cb22b5e"
-    Publisher="CN=lamadio"
+    Publisher="CN=Microsoft"
     Version="1.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="ff8b7c34-0947-42e1-877a-64f95cb22b5e" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>BigBrain</DisplayName>
-    <PublisherDisplayName>lamadio</PublisherDisplayName>
+    <DisplayName>$safeprojectname$</DisplayName>
+    <PublisherDisplayName>Microsoft</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -32,10 +32,10 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="BigBrain.App">
       <uap:VisualElements
-        DisplayName="BigBrain"
+        DisplayName="UWP"
         Square150x150Logo="Assets\Logo.png"
         Square44x44Logo="Assets\SmallLogo.png"
-        Description="BigBrain"
+        Description="UWP"
         BackgroundColor="#464646">
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
@@ -44,5 +44,10 @@
 
   <Capabilities>
     <Capability Name="internetClient" />
+    <DeviceCapability Name="serialcommunication">
+      <Device Id="any">
+        <Function Type="name:serialPort" />
+      </Device>
+    </DeviceCapability>
   </Capabilities>
 </Package>

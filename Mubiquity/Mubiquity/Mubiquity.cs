@@ -20,6 +20,8 @@
 */
 
 using System;
+using System.IO;
+using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -61,9 +63,13 @@ namespace Mubiquity
     public sealed class Mubiquity : Package
     {
         /// <summary>
-        /// Main automation object for referencing Visual Studio object model
+        /// Main automation object for referencing Visual Studio object model.
+        /// These need to have managed references or the object can be garbage collected
         /// </summary>
         private _DTE Dte = null;
+        private BuildEvents buildEvents = null;
+        private SolutionEvents solutionEvents = null;
+        private ProjectItemsEvents projectItemsEvents = null;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Mubiquity"/> class.
@@ -87,6 +93,10 @@ namespace Mubiquity
         {
             Debug.WriteLine(string.Format(CultureInfo.CurrentCulture, "Entering Initialize() of: {0}", this.ToString()));
             Dte = this.GetService(typeof(_DTE)) as _DTE;
+            buildEvents = Dte.Events.BuildEvents;
+            solutionEvents = Dte.Events.SolutionEvents;
+            projectItemsEvents = ((EnvDTE80.Events2)Dte.Events).ProjectItemsEvents;
+
             ConnectEvents();
             base.Initialize();
         }
@@ -103,23 +113,138 @@ namespace Mubiquity
         {
             if (Dte != null)
             {
-                Dte.Events.SolutionEvents.ProjectAdded += new _dispSolutionEvents_ProjectAddedEventHandler(this.OnProjectAdded);
-                //Dte.Events.SolutionEvents.QueryCloseSolution += new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
-                //Dte.Events.BuildEvents.OnBuildBegin += new _dispBuildEvents_OnBuildBeginEventHandler(this.OnBuildBegin);
-                ((EnvDTE80.Events2)Dte.Events).ProjectItemsEvents.ItemAdded += new _dispProjectItemsEvents_ItemAddedEventHandler(this.OnProjectItemAdded);
+                solutionEvents.ProjectAdded += new _dispSolutionEvents_ProjectAddedEventHandler(this.OnProjectAdded);
+                solutionEvents.Opened += new _dispSolutionEvents_OpenedEventHandler(this.OnSolutionOpened);
+                //solutionEvents.QueryCloseSolution += new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
+                buildEvents.OnBuildBegin += new _dispBuildEvents_OnBuildBeginEventHandler(this.OnBuildBegin);
+                projectItemsEvents.ItemAdded += new _dispProjectItemsEvents_ItemAddedEventHandler(this.OnProjectItemAdded);
             }
         }
         private void DisconnectEvents()
         {
             if (Dte != null)
             {
-                //Dte.Events.BuildEvents.OnBuildBegin -= new _dispBuildEvents_OnBuildBeginEventHandler(this.OnBuildBegin);
-//                Dte.Events.SolutionEvents.QueryCloseSolution -= new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
-                Dte.Events.SolutionEvents.ProjectAdded -= new _dispSolutionEvents_ProjectAddedEventHandler(this.OnProjectAdded);
-                ((EnvDTE80.Events2)Dte.Events).ProjectItemsEvents.ItemAdded -= new _dispProjectItemsEvents_ItemAddedEventHandler(this.OnProjectItemAdded);
+                buildEvents.OnBuildBegin -= new _dispBuildEvents_OnBuildBeginEventHandler(this.OnBuildBegin);
+                solutionEvents.Opened -= new _dispSolutionEvents_OpenedEventHandler(this.OnSolutionOpened);
+                //solutionEvents.QueryCloseSolution -= new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
+                solutionEvents.ProjectAdded -= new _dispSolutionEvents_ProjectAddedEventHandler(this.OnProjectAdded);
+                projectItemsEvents.ItemAdded -= new _dispProjectItemsEvents_ItemAddedEventHandler(this.OnProjectItemAdded);
             }
         }
 
+        private ProjectItem findInoInProject(ProjectItems projItems)
+        {
+            // Can be null
+            if (projItems == null)
+            {
+                return null;
+            }
+
+            foreach (var item in projItems)
+            {
+                var pi = item as ProjectItem;
+                var filename = pi.Name.ToLower();
+                if (filename.Contains(".ino"))
+                {
+                    return pi;
+                }
+                else
+                {
+                    ProjectItem found = findInoInProject(pi.ProjectItems);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
+
+            return null;
+        }
+        private ProjectItem findFirmwareFolderInProject(ProjectItems projItems)
+        {
+            // Can be null
+            if (projItems == null)
+            {
+                return null;
+            }
+
+            foreach (var item in projItems)
+            {
+                var pi = item as ProjectItem;
+                var filename = pi.Name.ToLower();
+                if (filename.Contains("firmware"))
+                {
+                    return pi;
+                }
+                else
+                {
+                    ProjectItem found = findFirmwareFolderInProject(pi.ProjectItems);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
+
+            return null;
+        }
+        private ProjectItem findPathInProject(string path, ProjectItems projItems)
+        {
+            string comparePath = path.ToLower();
+            // Can be null
+            if (projItems == null)
+            {
+                return null;
+            }
+
+            foreach (var item in projItems)
+            {
+                var pi = item as ProjectItem;
+                var filename = pi.Name.ToLower();
+                if (filename.Contains(Path.GetFileName(comparePath)))
+                {
+                    return pi;
+                }
+                else
+                {
+                    ProjectItem found = findPathInProject(path, pi.ProjectItems);
+                    if (found != null)
+                    {
+                        return found;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private bool HasArduinoProjectItems(ProjectItems projItems)
+        {
+            return findInoInProject(projItems) != null;
+        }
+
+        /// <summary>
+        /// Returns true if the given project is a Mubiquity Solution
+        /// </summary>
+        /// <param name="proj">project to evaluate</param>
+        /// <returns>true is the project is a Mubiquity Solution.  false otherwise.</returns>
+        private bool IsMubiquitySolution(Solution solution)
+        {
+            if (solution == null || solution.Projects == null)
+            {
+                return false;
+            }
+
+            foreach (var p in solution.Projects)
+            {
+                var proj = p as Project;
+                if (HasArduinoProjectItems(proj.ProjectItems))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         /// <summary>
         /// Returns true if the given project is a Mubiquity project
         /// </summary>
@@ -127,17 +252,84 @@ namespace Mubiquity
         /// <returns>true is the project is a Mubiquity project.  false otherwise.</returns>
         private bool IsMubiquityProject(Project proj)
         {
-            // TODO: Detect that this is a Mubiquity project
-            return true;
+            if (IsMubiquitySolution(Dte.Solution))
+            {
+                // Is mubiquity solution, but is it the non-arduino project?
+                return !HasArduinoProjectItems(proj.ProjectItems);
+            }
+
+            return false;
         }
 
         private void OnProjectItemAdded(ProjectItem newItem)
         {
-            Debug.WriteLine(newItem.Name);
-            if (newItem.Name.Contains(".ino")) // check to make sure this is only done on ino files
+            // Nothing for now
+        }
+
+        private void OnBuildBegin(vsBuildScope scope, vsBuildAction action)
+        {
+            Debug.WriteLine("Build beginning");
+
+            // Enumerate to see if we have a Makefile project
+            var solution = Dte.Solution;
+            List<ProjectItem> inosEncountered = new List<ProjectItem>();
+
+            foreach (var p in solution.Projects)
             {
-                // make it use the c++ compiler
-                newItem.Properties.Item("ItemType").Value = "ClCompile";
+                var project = p as Project;
+                ProjectItem ino = findInoInProject(project.ProjectItems);
+                if (ino != null)
+                {
+                    inosEncountered.Add(ino);
+                    var projectPath = Path.GetDirectoryName(project.FullName);
+
+                    ArduinoProjectHelper arduinoHelper = new ArduinoProjectHelper(Path.Combine(projectPath, "Makefile"), ino.Name);
+                    arduinoHelper.ManifestPrefix = "Mubiquity.Resources";
+
+                    arduinoHelper.regenerateMakefile();
+                }
+            }
+
+            // Ensure that the output of the Arduino project is in the firmware folder of the mubiquity project
+            foreach (var p in solution.Projects)
+            {
+                var project = p as Project;
+                ProjectItem ino = findInoInProject(project.ProjectItems);
+
+                // Not an INO.
+                if (ino == null)
+                {
+                    foreach (var inos in inosEncountered)
+                    {
+                        // Inject the output.
+                        var inoProjectPath = inos.FileNames[0];
+                        var hexPath = Path.ChangeExtension(inoProjectPath, "Hex");
+
+                        // Only inject if we have a firmware Folder.
+                        var firmwareFolderItem = findFirmwareFolderInProject(project.ProjectItems);
+                        if (firmwareFolderItem != null)
+                        {
+                            if (findPathInProject(hexPath, firmwareFolderItem.ProjectItems) == null)
+                            {
+                                if (!File.Exists(hexPath))
+                                {
+                                    // Temporarily create one so we can add it
+                                    // This will be replaced during build with a real makefile.
+                                    using (StreamWriter fakeHexFile = new StreamWriter(hexPath, false))
+                                    {
+                                        fakeHexFile.WriteLine("Hello World!");
+                                    }
+                                }
+
+                                firmwareFolderItem.ProjectItems.AddFromFile(hexPath);
+
+                                var hexFirmwareProjectItem = findPathInProject(hexPath, firmwareFolderItem.ProjectItems);
+                                hexFirmwareProjectItem.Properties.Item("ItemType").Value = "Content";
+                                hexFirmwareProjectItem.Properties.Item("CopyToOutputDirectory").Value = 1;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -145,32 +337,46 @@ namespace Mubiquity
         /// Callback that gets called when a project is added to a solution or opened in an existing solution
         /// </summary>
         /// <param name="proj">Project that is being added or opened</param>
-        private void OnProjectAdded(Project proj)
+        private void OnProjectAdded(Project project)
         {
-            if (IsMubiquityProject(proj))
-            {
-                AddNuGetPackage(proj);
-            }
+            // nothing for now
         }
 
-
-        #endregion
-
-        #region NugetUpdate code
         /// <summary>
-        /// Add our nuget package to the project
+        /// Callback that gets called when a project is added to a solution or opened in an existing solution
         /// </summary>
-        /// <param name="proj">Project to add the NuGet to.</param>
-        private void AddNuGetPackage(Project proj)
+        /// <param name="proj">Project that is being added or opened</param>
+        private void OnSolutionOpened()
         {
-            IComponentModel componentModel = (IComponentModel)GetService(typeof(SComponentModel));
-            IVsPackageInstaller installerServices = componentModel.GetService<IVsPackageInstaller>();
-            if (installerServices != null)
+            var solution = Dte.Solution;
+            List<Project> microControllerProject = new List<Project>();
+            Project uwpProject = null;
+
+            // Set the uwp project dependencies
+            foreach (var p in solution.Projects)
             {
-                installerServices.InstallPackage("All", proj, "Microsoft.IoT.Mubiquity", (String)null, false);
+                var project = p as Project;
+                ProjectItem ino = findInoInProject(project.ProjectItems);
+                if (ino == null)
+                {
+                    uwpProject = project;
+                }
+                else
+                {
+                    microControllerProject.Add(project);
+                }
+            }
+
+            if (uwpProject != null)
+            {
+                foreach (var mcu in microControllerProject)
+                {
+                    solution.SolutionBuild.BuildDependencies.Item(uwpProject.UniqueName).AddProject(mcu.UniqueName);
+                }
             }
         }
-        #endregion
 
+
+        #endregion
     }
 }

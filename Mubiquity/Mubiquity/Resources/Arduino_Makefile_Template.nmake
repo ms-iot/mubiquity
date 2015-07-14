@@ -1,0 +1,54 @@
+﻿
+FORMAT = ihex
+
+CFLAGS = -g -Os -w -ffunction-sections -fdata-sections -MMD -gstabs -DF_CPU=$(F_CPU) -D$(DEF_CPU) -D$(D_USB_VID) -D$(D_USB_PID) -I "$(ARDUINO_FIRMWARE)" -I "$(VARIANT_PATH)"
+CXXFLAGS = -g -Os -w -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -MMD -DF_CPU=$(F_CPU) -D$(DEF_CPU) -D$(D_USB_VID) -D$(D_USB_PID) -I "$(ARDUINO_FIRMWARE)" -I "$(VARIANT_PATH)"
+LDFLAGS = -Os -Wl,--gc-sections
+
+# Program settings
+CC = "$(ARDUINO_TOOLS)\avr-gcc.exe"
+CXX = "$(ARDUINO_TOOLS)\avr-g++.exe"
+LD = "$(ARDUINO_TOOLS)\avr-ld.exe"
+OBJCOPY = "$(ARDUINO_TOOLS)\avr-objcopy.exe"
+
+# Combine all necessary flags and optional flags.
+# Add target processor to flags.
+ALL_CFLAGS = -mmcu=$(MCU) -I. $(CFLAGS)
+ALL_CXXFLAGS = -mmcu=$(MCU) -I. $(CXXFLAGS)
+
+# Default target.
+all: build
+
+build: elf hex
+
+elf: $(TARGET).elf
+hex: $(TARGET)
+
+.SUFFIXES: .elf .hex .ino
+
+# Link: create ELF output file from object files.
+$(TARGET).elf: $(OBJ)
+	$(CC) $(ALL_CFLAGS) $(OBJ) --output $@ $(LDFLAGS)
+
+$(TARGET): $(TARGET).elf
+	$(OBJCOPY) -O $(FORMAT) -R .eeprom $(TARGET).elf $@
+
+# Compile: create object files from C++ source files.
+{$(ARDUINO_FIRMWARE)}.cpp{$(O)}.obj:
+	$(CXX) -c $(ALL_CXXFLAGS) $< -o $@
+
+# Compile: create object files from C++ source files.
+.ino{$(O)}.obj:
+	$(CXX) -x c++ -include "$(ARDUINO_FIRMWARE)\Arduino.h" -c $(ALL_CXXFLAGS) $< -o $@ 
+
+# Compile: create object files from C source files.
+{$(ARDUINO_FIRMWARE)}.c{$(O)}.obj:
+	$(CC) -c $(ALL_CFLAGS) $< -o $@ 
+
+
+# Target: clean project.
+clean:
+	-del /f $(TARGET).hex $(TARGET).elf $(TARGET).map
+	rd /s /q $(O)
+
+.PHONY:	all build elf hex clean
