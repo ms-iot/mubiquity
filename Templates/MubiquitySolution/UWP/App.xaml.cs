@@ -114,6 +114,8 @@ namespace $safeprojectname$
                     ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Firmware/Arduino.hex", 28672);
 
                     await programmer.program(hexFile);
+
+                    // The Arduino bootloader has a delay of 5 seconds
                     await Task.Delay(5000);
                 }
             });

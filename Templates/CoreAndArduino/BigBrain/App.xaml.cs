@@ -116,12 +116,13 @@ namespace BigBrain
                 {
                     var arduino = arduinoList[0];
                     await arduino.connect();
-                    Assert.IsTrue(arduino.IsConnected);
                     var programmer = arduino.GetProgrammer();
 
-                    ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Assets/Blink.cpp.hex", 28672);
+                    ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Assets/Arduino.hex", 28672);
 
                     await programmer.program(hexFile);
+
+                    // The Arduino bootloader has a delay of 5 seconds
                     await Task.Delay(5000);
                 }
             });
