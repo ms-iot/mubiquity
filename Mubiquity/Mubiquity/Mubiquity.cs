@@ -35,7 +35,7 @@ using Microsoft.VisualStudio.OLE.Interop;
 using Microsoft.ApplicationInsights;
 using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Win32;
-using NuGet.VisualStudio;
+//using NuGet.VisualStudio;
 using EnvDTE;
 using Microsoft.VisualStudio.ComponentModelHost;
 
