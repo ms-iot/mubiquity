@@ -48,11 +48,18 @@ namespace $safeprojectname$
     sealed partial class App : Application
     {
         /// <summary>
+        /// Allows tracking page views, exceptions and other telemetry through the Microsoft Application Insights service.
+        /// </summary>
+        public static Microsoft.ApplicationInsights.TelemetryClient TelemetryClient;
+
+        /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
         /// executed, and as such is the logical equivalent of main() or WinMain().
         /// </summary>
         public App()
         {
+            TelemetryClient = new Microsoft.ApplicationInsights.TelemetryClient();
+
             this.InitializeComponent();
             this.Suspending += OnSuspending;
         }
@@ -111,9 +118,11 @@ namespace $safeprojectname$
                     await arduino.connect();
                     var programmer = arduino.GetProgrammer();
 
-                    ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Firmware/Arduino.hex", 28672);
+                    ArduinoHexFile hexFile = await ArduinoHexFile.LoadFirmwareFromResource("ms-appx:///Assets/Arduino.hex", 28672);
 
                     await programmer.program(hexFile);
+
+                    // The Arduino bootloader has a delay of 5 seconds
                     await Task.Delay(5000);
                 }
             });

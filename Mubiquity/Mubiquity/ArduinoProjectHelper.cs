@@ -24,6 +24,8 @@ using System.IO;
 using System.Text;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
+using System.Diagnostics;
 
 namespace Mubiquity
 {
@@ -38,12 +40,181 @@ namespace Mubiquity
         public string USB_PID;
     }
 
+    class LibraryProperties
+    {
+        public string Name = "";
+        public string Version = "";
+        public string BasePath = "";
+
+        public List<string> Architectures = new List<string>();
+
+        public string GetSourcePath(string architecture)
+        {
+            if (Architectures.Contains("*"))
+            {
+                return Path.Combine(BasePath, "src");
+            }
+            else if (Architectures.Contains(architecture))
+            {
+                return Path.Combine(BasePath, "src", architecture);
+            }
+
+            return null;
+        }
+
+        public LibraryProperties()
+        {
+        }
+
+        public void load(string directory)
+        {
+            BasePath = directory;
+
+            var path = Path.Combine(directory, "library.properties");
+            if (File.Exists(path))
+            {
+
+                using (StreamReader libProps = new StreamReader(path, false))
+                {
+                    load(libProps);
+                }
+            }
+            else
+            {
+                // Legacy library; sources are in src
+                Architectures.Add("*");
+            }
+        }
+
+        public void load(StreamReader reader)
+        {
+            while (!reader.EndOfStream)
+            {
+                string line = reader.ReadLine();
+                string[] kvp = line.Split(new char[] { '=' }, 2);
+
+                if (kvp.Length > 1)
+                {
+                    if (line.Contains("name"))
+                    {
+                        Name = kvp[1];
+                    }
+                    else if (line.Contains("version"))
+                    {
+                        Version = kvp[1];
+                    }
+                    else if (line.Contains("architectures"))
+                    {
+                        var arch = kvp[1].Split(',');
+                        foreach (var a in arch)
+                        {
+                            Architectures.Add(a);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    class ArduinoLibrary
+    {
+        public LibraryProperties properties = new LibraryProperties();
+        public string libraryPath;
+        public string headerPath;
+        public List<string> CPPSourceFiles = new List<string>();
+        public List<string> CSourceFiles = new List<string>();
+
+        public ArduinoLibrary(string path)
+        {
+            libraryPath = path;
+
+            properties.load(libraryPath);
+
+            headerPath = Path.Combine(libraryPath, "src");
+        }
+
+        public void loadSources(string architecture)
+        {
+            try
+            {
+                var sourcePath = properties.GetSourcePath(architecture);
+                var rawFiles = Directory.EnumerateFiles(sourcePath, "*.c", SearchOption.TopDirectoryOnly);
+                foreach (var file in rawFiles)
+                {
+                    CSourceFiles.Add(file);
+                }
+
+                rawFiles = Directory.EnumerateFiles(sourcePath, "*.cpp", SearchOption.TopDirectoryOnly);
+                foreach (var file in rawFiles)
+                {
+                    CPPSourceFiles.Add(file);
+                }
+            }
+            catch (FileNotFoundException)
+            {
+                // Nothing found
+            }
+        }
+
+        static public ArduinoLibrary createFromIncludeFile(string includeFilename)
+        {
+            // Notes:
+            // We process the ino to extract header files.
+            // The .h is removed from filename, and used to locate the library in the following locations:
+            // Documents\Arduino\Libraries
+            // C:\Program Files (x86)\Arduino\libraries
+            // C:\Program Files (x86)\Arduino\hardware\arduino\avr\libraries
+            // If the Library itself has a library.properties file, it needs to be parsed 
+            // to see which architectures are supported.
+            //  * - sources and header are in Library\src
+            //  avr or sam - header is in Library\src, sources are in Library\src\$arch\
+
+            ArduinoLibrary lib = null;
+            var libraryName = Path.GetFileNameWithoutExtension(includeFilename);
+            var libraryPath = ArduinoLibrary.findLibraryPath(libraryName);
+            if (!string.IsNullOrEmpty(libraryPath))
+            {
+                lib = new ArduinoLibrary(libraryPath);
+
+            }
+
+            return lib;
+        }
+
+        static private string findLibraryPathInPath(string name, string path)
+        {
+            string libraryPath = Path.Combine(path, name);
+            if (Directory.Exists(libraryPath))
+            {
+                return libraryPath;
+            }
+
+            return null;
+        }
+
+        static private string findLibraryPath(string name)
+        {
+            string libraryPath = findLibraryPathInPath(name, ArduinoPathHelper.ArduinoUserLibraryPath);
+            if (string.IsNullOrEmpty(libraryPath))
+            {
+                libraryPath = findLibraryPathInPath(name, ArduinoPathHelper.ArduinoSystemLibraryPath);
+                if (string.IsNullOrEmpty(libraryPath))
+                {
+                    libraryPath = findLibraryPathInPath(name, ArduinoPathHelper.ArduinoSystemAVRLibraryPath);
+                }
+            }
+
+            return libraryPath;
+        }
+    }
+
 
     class ArduinoProjectHelper
     {
-        string _pathToMakeFile;
-        string _pathToIno;
+        string _pathToMakeFile = null;
+        string _pathToIno = null;
         string _variant = "Leonardo";
+        StreamReader _inoReader = null;
 
         const string kManifestStringName = "Arduino_Makefile_Template.nmake";
         public string ManifestPrefix { get; set; } = "";
@@ -91,50 +262,15 @@ namespace Mubiquity
         }
 
 
-        public string ArduinoPath
-        {
-            get
-            {
-                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Arduino");
-            }
-        }
-
-        public string ArduinoVariantPath
-        {
-            get
-            {
-                return Path.Combine(ArduinoPath, "hardware\\arduino\\avr\\variants", ArduinoVariant);
-            }
-        }
-
-        public string ArduinoToolsPath
-        {
-            get
-            {
-                return Path.Combine(ArduinoPath, "hardware\\tools\\avr\\bin");
-            }
-        }
-
-        public string ArduinoFirmwarePath
-        {
-            get
-            {
-                return Path.Combine(ArduinoPath, "hardware\\arduino\\avr\\cores\\arduino");
-            }
-        }
-
-        public string ArduinoBoardPath
-        {
-            get
-            {
-                return Path.Combine(ArduinoPath, "hardware\\arduino\\avr\\boards.txt");
-            }
-        }
-
         public ArduinoProjectHelper(string pathToMakeFile, string pathToIno)
         {
             _pathToMakeFile = pathToMakeFile;
             _pathToIno = pathToIno;
+        }
+        public ArduinoProjectHelper(string pathToMakeFile, StreamReader inoReader)
+        {
+            _pathToMakeFile = pathToMakeFile;
+            _inoReader = inoReader;
         }
 
         public Dictionary<string, ArduinoBoardInfo> getBoardInfo()
@@ -142,48 +278,55 @@ namespace Mubiquity
             var dict = new Dictionary<string, ArduinoBoardInfo>();
 
             ArduinoBoardInfo currentBoard = new ArduinoBoardInfo();
-            using (StreamReader boardTextFile = new StreamReader(ArduinoBoardPath, false))
+            using (StreamReader boardTextFile = new StreamReader(ArduinoPathHelper.ArduinoBoardPath, false))
             {
                 while (!boardTextFile.EndOfStream)
                 {
                     string line = boardTextFile.ReadLine();
-                    string[] kvp = line.Split('=');
-
-                    if (line.Contains(".name="))
+                    if (!string.IsNullOrEmpty(line))
                     {
-                        string[] processed = line.Split('.', '=');
-
-                        if (currentBoard.VARIANT != null)
+                        if (line.Contains(".name="))
                         {
-                            dict.Add(currentBoard.VARIANT.ToLower(), currentBoard);
-                        }
+                            string[] processed = line.Split('.', '=');
 
-                        currentBoard = new ArduinoBoardInfo();
-                        currentBoard.VARIANT = processed[0];
-                        currentBoard.FriendlyName = processed[processed.Length - 1];
-                    }
-                    else if (line.Contains("mcu"))
-                    {
-                        currentBoard.MCU = kvp[kvp.Length - 1];
-                    }
-                    else if (line.Contains("build.f_cpu"))
-                    {
-                        currentBoard.F_CPU = kvp[kvp.Length - 1];
-                    }
-                    else if (line.Contains("build.board"))
-                    {
-                        currentBoard.DEF_CPU = kvp[kvp.Length - 1];
-                    }
-                    else if (line.Contains("build.vid"))
-                    {
-                        currentBoard.USB_VID = kvp[kvp.Length - 1];
-                    }
-                    else if (line.Contains("build.pid"))
-                    {
-                        currentBoard.USB_PID = kvp[kvp.Length - 1];
+                            if (currentBoard.VARIANT != null)
+                            {
+                                dict.Add(currentBoard.VARIANT.ToLower(), currentBoard);
+                            }
+
+                            currentBoard = new ArduinoBoardInfo();
+                            currentBoard.VARIANT = processed[0];
+                            currentBoard.FriendlyName = processed[processed.Length - 1];
+                        }
+                        else
+                        {
+                            string[] kvp = line.Split('=');
+                            if (kvp.Length > 1)
+                            { 
+                                if (line.Contains("mcu"))
+                                {
+                                    currentBoard.MCU = kvp[kvp.Length - 1];
+                                }
+                                else if (line.Contains("build.f_cpu"))
+                                {
+                                    currentBoard.F_CPU = kvp[kvp.Length - 1];
+                                }
+                                else if (line.Contains("build.board"))
+                                {
+                                    currentBoard.DEF_CPU = kvp[kvp.Length - 1];
+                                }
+                                else if (line.Contains("build.vid"))
+                                {
+                                    currentBoard.USB_VID = kvp[kvp.Length - 1];
+                                }
+                                else if (line.Contains("build.pid"))
+                                {
+                                    currentBoard.USB_PID = kvp[kvp.Length - 1];
+                                }
+                            }
+                        }
                     }
                 }
-
             }
 
             if (!dict.ContainsKey(currentBoard.VARIANT.ToLower()))
@@ -198,7 +341,7 @@ namespace Mubiquity
         public List<string> getArduinoFiles(string filter = "*.*")
         {
             var files = new List<string>();
-            var rawFiles = Directory.EnumerateFiles(ArduinoFirmwarePath, filter, SearchOption.TopDirectoryOnly);
+            var rawFiles = Directory.EnumerateFiles(ArduinoPathHelper.ArduinoFirmwarePath, filter, SearchOption.TopDirectoryOnly);
             foreach(var file in rawFiles)
             {
                 files.Add(file);
@@ -206,17 +349,53 @@ namespace Mubiquity
             return files;
         }
 
-        public string GetShortPath(string longPath)
+        public List<string> extractLibrariesFromStream(StreamReader inoReader)
         {
-            // Nmake - 1980s technology...
-            StringBuilder shortPath = new StringBuilder(longPath.Length + 1);
+            List<string> libraries = new List<string>();
+            string includePattern = "^\\s*\\#include\\s*[\"<]\\s*([^\">]+)\\s*[\">]";
 
-            if (0 == ArduinoProjectHelper.GetShortPathName(longPath, shortPath, shortPath.Capacity))
+            while (!inoReader.EndOfStream)
             {
-                return longPath;
+                string readLine = inoReader.ReadLine();
+
+                var match = Regex.Match(readLine, includePattern);
+                if (match.Groups.Count > 1)
+                {
+                    // Group 1 is the whole match; Group 2 is the inner capture
+                    libraries.Add(match.Groups[1].Value);
+                }
             }
 
-            return shortPath.ToString();
+            return libraries;
+        }
+
+        public List<ArduinoLibrary> extractLibrariesFromIno(StreamReader inoReader)
+        {
+            var arduinoLibraries = new List<ArduinoLibrary>();
+            var libraryNames = extractLibrariesFromStream(inoReader);
+            foreach (var libName in libraryNames)
+            {
+                arduinoLibraries.Add(ArduinoLibrary.createFromIncludeFile(libName));
+            }
+
+            return arduinoLibraries;
+        }
+
+        public List<ArduinoLibrary> extractLibrariesFromIno()
+        {
+            if (_inoReader != null)
+            {
+                return extractLibrariesFromIno(_inoReader);
+            }
+            else if (!string.IsNullOrEmpty(_pathToIno))
+            {
+                using (StreamReader inoReader = new StreamReader(_pathToIno))
+                {
+                    return extractLibrariesFromIno(inoReader);
+                }
+            }
+
+            return new List<ArduinoLibrary>();
         }
 
         public void regenerateMakefile()
@@ -234,19 +413,39 @@ namespace Mubiquity
             {
 
                 // squirt out the basics
-                newMakeFile.WriteLine("ARDUINO_INSTALL=" + GetShortPath(ArduinoPath));
-                newMakeFile.WriteLine("ARDUINO_FIRMWARE=" + GetShortPath(ArduinoFirmwarePath));
-                newMakeFile.WriteLine("ARDUINO_TOOLS=" + GetShortPath(ArduinoToolsPath));
-                newMakeFile.WriteLine("VARIANT_PATH=" + GetShortPath(ArduinoVariantPath));
-                newMakeFile.Write("CXXSRC=");
+                newMakeFile.WriteLine("ARDUINO_INSTALL=" + ArduinoPathHelper.ArduinoPathShort);
+                newMakeFile.WriteLine("ARDUINO_FIRMWARE=" + ArduinoPathHelper.ArduinoFirmwarePathShort);
+                newMakeFile.WriteLine("ARDUINO_TOOLS=" + ArduinoPathHelper.ArduinoToolsPathShort);
+                newMakeFile.WriteLine("VARIANT_PATH=" + ArduinoPathHelper.GetArduinoVariantPathShort(ArduinoVariant));
 
+                // Write out CPP & c files
                 var cppFiles = getArduinoFiles("*.cpp");
                 var cFiles = getArduinoFiles("*.c");
 
+                // Find libraries
+                var libraries = extractLibrariesFromIno();
+
+                foreach (var lib in libraries)
+                {
+                    foreach (var cppFile in lib.CPPSourceFiles)
+                    {
+                        cppFiles.Add(cppFile);
+                    }
+
+                    foreach (var cFile in lib.CSourceFiles)
+                    {
+                        cFiles.Add(cFile);
+                    }
+
+                    newMakeFile.WriteLine("CFLAGS= $(CFLAGS) -I " + ArduinoPathHelper.GetShortPath(lib.headerPath));
+                    newMakeFile.WriteLine("CXXFLAGS= $(CXXFLAGS) -I " + ArduinoPathHelper.GetShortPath(lib.headerPath));
+                }
+
+                newMakeFile.Write("CXXSRC=");
                 foreach (var cppFile in cppFiles)
                 {
                     newMakeFile.WriteLine("\t\\");
-                    newMakeFile.Write(string.Format("\t{0}", GetShortPath(cppFile)));
+                    newMakeFile.Write(string.Format("\t{0}", ArduinoPathHelper.GetShortPath(cppFile)));
                 }
                 newMakeFile.WriteLine("");
 
@@ -255,17 +454,19 @@ namespace Mubiquity
                 foreach (var cFile in cFiles)
                 {
                     newMakeFile.WriteLine("\t\\");
-                    newMakeFile.Write(string.Format("\t{0}", GetShortPath(cFile)));
+                    newMakeFile.Write(string.Format("\t{0}", ArduinoPathHelper.GetShortPath(cFile)));
                 }
                 newMakeFile.WriteLine("");
 
                 if (_pathToIno != null)
                 {
                     newMakeFile.Write("INOSRC=\\");
-                    newMakeFile.Write(string.Format("\t{0}", GetShortPath(_pathToIno)));
+                    newMakeFile.Write(string.Format("\t{0}", ArduinoPathHelper.GetShortPath(_pathToIno)));
 
                     newMakeFile.WriteLine("");
                 }
+
+                // Write out OBJs
 
                 newMakeFile.Write("OBJ=");
                 foreach (var cppFile in cppFiles)
@@ -314,6 +515,48 @@ namespace Mubiquity
                     }
                 }
             }
+        }
+
+    }
+
+    class ArduinoPathHelper
+    {
+        public static string ArduinoPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Arduino");
+        public static string ArduinoPathShort => ArduinoPathHelper.GetShortPath(ArduinoPathHelper.ArduinoPath);
+
+        public static string ArduinoToolsPath => Path.Combine(ArduinoPathHelper.ArduinoPath, "hardware\\tools\\avr\\bin");
+        public static string ArduinoToolsPathShort => ArduinoPathHelper.GetShortPath(ArduinoPathHelper.ArduinoToolsPath);
+
+        public static string ArduinoFirmwarePath => Path.Combine(ArduinoPathHelper.ArduinoPath, "hardware\\arduino\\avr\\cores\\arduino");
+        public static string ArduinoFirmwarePathShort => ArduinoPathHelper.GetShortPath(ArduinoPathHelper.ArduinoFirmwarePath);
+
+        public static string ArduinoBoardPath => Path.Combine(ArduinoPathHelper.ArduinoPath, "hardware\\arduino\\avr\\boards.txt");
+        public static string ArduinoBoardPathShort => ArduinoPathHelper.GetShortPath(ArduinoPathHelper.ArduinoBoardPath);
+
+        public static string ArduinoSystemLibraryPath => Path.Combine(ArduinoPathHelper.ArduinoPath, "libraries");
+        public static string ArduinoSystemAVRLibraryPath => Path.Combine(ArduinoPathHelper.ArduinoPath, "hardware\\arduino\\avr\\libraries");
+        public static string ArduinoUserLibraryPath => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Arduino\\libraries");
+
+        public static string GetArduinoVariantPath(string variant)
+        {
+            return Path.Combine(ArduinoPathHelper.ArduinoPath, "hardware\\arduino\\avr\\variants", variant);
+        }
+        public static string GetArduinoVariantPathShort(string variant)
+        {
+            return ArduinoPathHelper.GetShortPath(ArduinoPathHelper.GetArduinoVariantPath(variant));
+        }
+
+        public static string GetShortPath(string longPath)
+        {
+            // Nmake - 1980s technology...
+            StringBuilder shortPath = new StringBuilder(longPath.Length + 1);
+
+            if (0 == ArduinoPathHelper.GetShortPathName(longPath, shortPath, shortPath.Capacity))
+            {
+                return longPath;
+            }
+
+            return shortPath.ToString();
         }
 
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]

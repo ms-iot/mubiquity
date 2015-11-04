@@ -26,13 +26,16 @@ using System.ComponentModel.Design;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.OLE.Interop;
+using Microsoft.ApplicationInsights;
+using Microsoft.ApplicationInsights.Extensibility;
 using Microsoft.Win32;
-using NuGet.VisualStudio;
+//using NuGet.VisualStudio;
 using EnvDTE;
 using Microsoft.VisualStudio.ComponentModelHost;
 
@@ -70,6 +73,7 @@ namespace Mubiquity
         private BuildEvents buildEvents = null;
         private SolutionEvents solutionEvents = null;
         private ProjectItemsEvents projectItemsEvents = null;
+        private TelemetryClient telemetry = null;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Mubiquity"/> class.
@@ -98,7 +102,19 @@ namespace Mubiquity
             projectItemsEvents = ((EnvDTE80.Events2)Dte.Events).ProjectItemsEvents;
 
             ConnectEvents();
+
             base.Initialize();
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                telemetry = new TelemetryClient();
+                telemetry.InstrumentationKey = "d5013fa4-b253-4166-9071-5b6c874acd0f";
+                telemetry.Context.Session.Id = Guid.NewGuid().ToString();
+                telemetry.Context.Device.OperatingSystem = Environment.OSVersion.ToString();
+                telemetry.Context.Device.Model = "VSIX";
+                FileVersionInfo fvi = FileVersionInfo.GetVersionInfo(typeof(Mubiquity).Assembly.Location);
+                telemetry.Context.Device.Type = fvi.FileVersion;
+            });
         }
 
         protected override void Dispose(bool disposing)
@@ -115,8 +131,9 @@ namespace Mubiquity
             {
                 solutionEvents.ProjectAdded += new _dispSolutionEvents_ProjectAddedEventHandler(this.OnProjectAdded);
                 solutionEvents.Opened += new _dispSolutionEvents_OpenedEventHandler(this.OnSolutionOpened);
-                //solutionEvents.QueryCloseSolution += new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
+                solutionEvents.QueryCloseSolution += new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
                 buildEvents.OnBuildBegin += new _dispBuildEvents_OnBuildBeginEventHandler(this.OnBuildBegin);
+                buildEvents.OnBuildDone += new _dispBuildEvents_OnBuildDoneEventHandler(this.OnBuildDone);
                 projectItemsEvents.ItemAdded += new _dispProjectItemsEvents_ItemAddedEventHandler(this.OnProjectItemAdded);
             }
         }
@@ -125,8 +142,9 @@ namespace Mubiquity
             if (Dte != null)
             {
                 buildEvents.OnBuildBegin -= new _dispBuildEvents_OnBuildBeginEventHandler(this.OnBuildBegin);
+                buildEvents.OnBuildDone -= new _dispBuildEvents_OnBuildDoneEventHandler(this.OnBuildDone);
                 solutionEvents.Opened -= new _dispSolutionEvents_OpenedEventHandler(this.OnSolutionOpened);
-                //solutionEvents.QueryCloseSolution -= new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
+                solutionEvents.QueryCloseSolution -= new _dispSolutionEvents_QueryCloseSolutionEventHandler(this.OnQueryCloseSolution);
                 solutionEvents.ProjectAdded -= new _dispSolutionEvents_ProjectAddedEventHandler(this.OnProjectAdded);
                 projectItemsEvents.ItemAdded -= new _dispProjectItemsEvents_ItemAddedEventHandler(this.OnProjectItemAdded);
             }
@@ -230,7 +248,7 @@ namespace Mubiquity
         /// <returns>true is the project is a Mubiquity Solution.  false otherwise.</returns>
         private bool IsMubiquitySolution(Solution solution)
         {
-            if (solution == null || solution.Projects == null)
+            if (solution?.Projects == null)
             {
                 return false;
             }
@@ -290,48 +308,78 @@ namespace Mubiquity
                 }
             }
 
-            // Ensure that the output of the Arduino project is in the firmware folder of the mubiquity project
-            foreach (var p in solution.Projects)
+            if (inosEncountered.Count > 0)
             {
-                var project = p as Project;
-                ProjectItem ino = findInoInProject(project.ProjectItems);
-
-                // Not an INO.
-                if (ino == null)
+                if (telemetry != null)
                 {
-                    foreach (var inos in inosEncountered)
+                    telemetry.TrackEvent("MubiquityBuild");
+                }
+
+                // Ensure that the output of the Arduino project is in the firmware folder of the mubiquity project
+                foreach (var p in solution.Projects)
+                {
+                    var project = p as Project;
+                    ProjectItem ino = findInoInProject(project.ProjectItems);
+
+                    // Not an INO.
+                    if (ino == null)
                     {
-                        // Inject the output.
-                        var inoProjectPath = inos.FileNames[0];
-                        var hexPath = Path.ChangeExtension(inoProjectPath, "Hex");
-
-                        // Only inject if we have a firmware Folder.
-                        var firmwareFolderItem = findFirmwareFolderInProject(project.ProjectItems);
-                        if (firmwareFolderItem != null)
+                        foreach (var inos in inosEncountered)
                         {
-                            if (findPathInProject(hexPath, firmwareFolderItem.ProjectItems) == null)
+                            // Inject the output.
+                            var inoProjectPath = inos.FileNames[0];
+                            var hexPath = Path.ChangeExtension(inoProjectPath, "Hex");
+
+                            // Only inject if we have a firmware Folder.
+                            var firmwareFolderItem = findFirmwareFolderInProject(project.ProjectItems);
+                            if (firmwareFolderItem != null)
                             {
-                                if (!File.Exists(hexPath))
+                                if (findPathInProject(hexPath, firmwareFolderItem.ProjectItems) == null)
                                 {
-                                    // Temporarily create one so we can add it
-                                    // This will be replaced during build with a real makefile.
-                                    using (StreamWriter fakeHexFile = new StreamWriter(hexPath, false))
+                                    if (!File.Exists(hexPath))
                                     {
-                                        fakeHexFile.WriteLine("Hello World!");
+                                        // Temporarily create one so we can add it
+                                        // This will be replaced during build with a real makefile.
+                                        using (StreamWriter fakeHexFile = new StreamWriter(hexPath, false))
+                                        {
+                                            fakeHexFile.WriteLine("Hello World!");
+                                        }
                                     }
+
+                                    firmwareFolderItem.ProjectItems.AddFromFile(hexPath);
+
+                                    var hexFirmwareProjectItem = findPathInProject(hexPath, firmwareFolderItem.ProjectItems);
+                                    hexFirmwareProjectItem.Properties.Item("ItemType").Value = "Content";
+                                    hexFirmwareProjectItem.Properties.Item("CopyToOutputDirectory").Value = 1;
                                 }
-
-                                firmwareFolderItem.ProjectItems.AddFromFile(hexPath);
-
-                                var hexFirmwareProjectItem = findPathInProject(hexPath, firmwareFolderItem.ProjectItems);
-                                hexFirmwareProjectItem.Properties.Item("ItemType").Value = "Content";
-                                hexFirmwareProjectItem.Properties.Item("CopyToOutputDirectory").Value = 1;
                             }
                         }
                     }
                 }
             }
         }
+
+        private void OnBuildDone(vsBuildScope scope, vsBuildAction action)
+        {
+            Debug.WriteLine("Build Finished");
+            var solution = Dte.Solution;
+            if (telemetry != null)
+            {
+                if (IsMubiquitySolution(solution))
+                {
+                    // Represents the number of failures
+                    if (solution.SolutionBuild.LastBuildInfo > 0)
+                    {
+                        telemetry.TrackEvent("MubiquityBuildFailed");
+                    }
+                    else
+                    {
+                        telemetry.TrackEvent("MubiquityBuildSucceeded");
+                    }
+                }
+            }
+        }
+
 
         /// <summary>
         /// Callback that gets called when a project is added to a solution or opened in an existing solution
@@ -367,8 +415,13 @@ namespace Mubiquity
                 }
             }
 
-            if (uwpProject != null)
+            if (uwpProject != null && microControllerProject.Count > 0)
             {
+                if (telemetry != null)
+                {
+                    telemetry.TrackEvent("MubiquitySolutionOpened");
+                }
+
                 foreach (var mcu in microControllerProject)
                 {
                     solution.SolutionBuild.BuildDependencies.Item(uwpProject.UniqueName).AddProject(mcu.UniqueName);
@@ -376,6 +429,14 @@ namespace Mubiquity
             }
         }
 
+        private void OnQueryCloseSolution(ref bool fCancel)
+        {
+            fCancel = false;
+            if (telemetry != null)
+            {
+                telemetry.Flush();
+            }
+        }
 
         #endregion
     }

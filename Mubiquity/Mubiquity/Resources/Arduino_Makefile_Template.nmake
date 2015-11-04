@@ -1,8 +1,8 @@
 ﻿
 FORMAT = ihex
 
-CFLAGS = -g -Os -w -ffunction-sections -fdata-sections -MMD -gstabs -DF_CPU=$(F_CPU) -D$(DEF_CPU) -D$(D_USB_VID) -D$(D_USB_PID) -I "$(ARDUINO_FIRMWARE)" -I "$(VARIANT_PATH)"
-CXXFLAGS = -g -Os -w -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -MMD -DF_CPU=$(F_CPU) -D$(DEF_CPU) -D$(D_USB_VID) -D$(D_USB_PID) -I "$(ARDUINO_FIRMWARE)" -I "$(VARIANT_PATH)"
+CFLAGS = $(CFLAGS) -g -Os -w -ffunction-sections -fdata-sections -MMD -gstabs -DF_CPU=$(F_CPU) -D$(DEF_CPU) -D$(D_USB_VID) -D$(D_USB_PID) -I "$(ARDUINO_FIRMWARE)" -I "$(VARIANT_PATH)"
+CXXFLAGS = $(CXXFLAGS) -g -Os -w -fno-exceptions -ffunction-sections -fdata-sections -fno-threadsafe-statics -MMD -DF_CPU=$(F_CPU) -D$(DEF_CPU) -D$(D_USB_VID) -D$(D_USB_PID) -I "$(ARDUINO_FIRMWARE)" -I "$(VARIANT_PATH)"
 LDFLAGS = -Os -Wl,--gc-sections
 
 # Program settings
